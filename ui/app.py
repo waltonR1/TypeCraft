@@ -58,7 +58,8 @@ class HumanTypingUI:
         self.table_exit_script_var = tk.StringVar(value="")
         
         # Code Block Scripting
-        self.code_end_script_var = tk.StringVar(value="enter")
+        self.code_block_mode_var = tk.StringVar(value="markdown")
+        self.code_end_script_var = tk.StringVar(value="")
 
         # Status
         self.status_var = tk.StringVar(value="状态：停止")
@@ -99,7 +100,7 @@ class HumanTypingUI:
     def _on_start(self):
         text = self.input_tab.get_text()
         if not text:
-            messagebox.showwarning("提示", "请输入要打字的文本")
+            messagebox.showwarning("提示", "请输入要输入的文本")
             return
         if self.engine_start:
             self.engine_start(text)
@@ -123,6 +124,7 @@ class HumanTypingUI:
 
     def get_config(self):
         return {
+            'system': self.system_var.get(),
             'min_delay': self.min_delay_var.get(),
             'max_delay': self.max_delay_var.get(),
             'countdown': self.countdown_var.get(),
@@ -142,6 +144,7 @@ class HumanTypingUI:
             'table_cell_script': self.table_cell_move_script_var.get(),
             'table_row_script': self.table_row_move_script_var.get(),
             'table_exit_script': self.table_exit_script_var.get(),
+            'code_block_mode': self.code_block_mode_var.get(),
             'code_end_script': self.code_end_script_var.get(),
         }
 

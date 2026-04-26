@@ -2,6 +2,13 @@ import tkinter as tk
 from tkinter import ttk
 
 class RecordDialog:
+    KEY_ORDER = {
+        "ctrl": 0,
+        "cmd": 1,
+        "alt": 2,
+        "shift": 3,
+    }
+
     def __init__(self, parent, target_var):
         self.parent = parent
         self.target_var = target_var
@@ -51,7 +58,7 @@ class RecordDialog:
             
     def _on_key_release(self, event):
         if not self.current_keys: return
-        combo = "+".join(sorted(list(self.current_keys)))
+        combo = "+".join(sorted(self.current_keys, key=lambda key: (self.KEY_ORDER.get(key, 99), key)))
         self.recorded_actions.append(combo)
         self.target_var.set(" ".join(self.recorded_actions))
         self.display_var.set(" ".join(self.recorded_actions))
