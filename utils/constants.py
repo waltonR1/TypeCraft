@@ -4,3 +4,4 @@ class TypingState:
     PAUSED = "paused"
 
 APP_TITLE = "Human Typing Simulator"
+APP_TITLE = "TypeCraft"

@@ -36,7 +36,7 @@ class CharacterHandler:
         # Pause after character
         delay = random.uniform(conf.get('min_delay', 0.04), conf.get('max_delay', 0.10)) if conf.get('jitter') else conf.get('min_delay', 0.04)
         
-        if ch == " ": 
+        if ch == " " and conf.get('system') == "macOS":
             # 针对 macOS 的空格自动变句号问题，增加空格后的延迟
             delay += random.uniform(0.35, 0.55)
         

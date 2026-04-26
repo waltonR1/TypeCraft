@@ -19,6 +19,7 @@ class TypingEngine:
         self.thread = None
         self.pending_closures = [] # 追踪编辑器自动补全的闭合符号
         self.is_in_code_block = False # 显式追踪是否在代码块中
+        self._stop_requested = False
 
     def log(self, msg):
         if self.log_callback:
@@ -29,13 +30,16 @@ class TypingEngine:
             self.status_callback(status)
 
     def start(self, text):
-        if self.state == TypingState.RUNNING:
+        if self.state in {TypingState.RUNNING, TypingState.PAUSED}:
+            self.log("当前已有任务在执行或暂停中，忽略重复启动请求")
             return
+        self._stop_requested = False
         self.state = TypingState.RUNNING
         self.thread = threading.Thread(target=self._worker, args=(text,), daemon=True)
         self.thread.start()
 
     def stop(self):
+        self._stop_requested = True
         self.state = TypingState.STOPPED
 
     def pause(self):
@@ -62,6 +66,8 @@ class TypingEngine:
     def _worker(self, text):
         conf = self.config()
         countdown = conf.get('countdown', 5)
+        code_block_mode = conf.get('code_block_mode', 'markdown')
+        pairs = TextProcessor.parse_auto_pairs(conf.get('auto_pair_config', "")) if conf.get('auto_pair_handle') else {}
 
         for i in range(countdown, 0, -1):
             if self.state == TypingState.STOPPED: return
@@ -92,12 +98,10 @@ class TypingEngine:
                 is_closing_block = raw_curr_type == "markdown_code_block" and all(c == '`' for c in line.strip())
                 if is_closing_block:
                     self.log(f"第 {index + 1} 行：检测到代码块结束")
-                    # 如果用户设置了退出脚本，执行它
                     exit_script = conf.get('code_end_script', "").strip()
-                    if exit_script:
+                    if code_block_mode == "block_editor" and exit_script:
                         self.kb.run_key_script(exit_script, lambda: self.state == TypingState.STOPPED)
                     else:
-                        # 默认行为：打出 ``` 然后回车
                         for ch in line:
                             self.kb.type_text(ch)
                         self.kb.press_enter()
@@ -115,15 +119,22 @@ class TypingEngine:
                     self.log(f"第 {index + 1} 行：执行代码块开启流程")
                     # 提取语言，例如 ```python -> python
                     lang = line.strip().replace("`", "").strip()
-                    self.kb.type_text("```")
-                    if self._sleep(random.uniform(1.0, 1.5)): return
-                    if lang:
-                        self.kb.type_text(lang)
-                        if self._sleep(random.uniform(0.6, 1.0)): return
-                    
-                    # Notion 等编辑器的开启逻辑
-                    self.kb.press_enter() # 确认语言/开启
-                    if self._sleep(random.uniform(1.2, 1.8)): return
+                    if code_block_mode == "block_editor":
+                        self.kb.type_text("```")
+                        if self._sleep(random.uniform(1.0, 1.5)): return
+                        if lang:
+                            self.kb.type_text(lang)
+                            if self._sleep(random.uniform(0.6, 1.0)): return
+                        self.kb.press_enter()
+                        if self._sleep(random.uniform(1.2, 1.8)): return
+                    else:
+                        for ch in line:
+                            if self.state == TypingState.STOPPED: return
+                            self._wait_if_paused()
+                            if CharacterHandler.type_char(self, ch, conf, "markdown_code_block", pairs): return
+                        if index < len(lines) - 1:
+                            self.kb.press_enter()
+                            if self._sleep(random.uniform(0.4, 0.7)): return
                     
                     self.is_in_code_block = True
                     prev_type = "markdown_code_block"
@@ -133,10 +144,14 @@ class TypingEngine:
             # --- 表格逻辑（仅在非代码块状态生效） ---
             if not self.is_in_code_block and conf.get('auto_table'):
                 if curr_type == "markdown_table_separator":
-                    self.log(f"跳过第 {index + 1} 行表格分隔线")
+                    if conf.get('skip_table_sep', True):
+                        self.log(f"跳过第 {index + 1} 行表格分隔线")
+                        in_table = True
+                        prev_type = curr_type
+                        continue
+
+                    self.log(f"第 {index + 1} 行：保留表格分隔线原样输入")
                     in_table = True
-                    prev_type = curr_type
-                    continue
 
                 if curr_type == "markdown_table_row":
                     is_first_row = prev_type not in {"markdown_table_row", "markdown_table_separator"}
@@ -176,13 +191,6 @@ class TypingEngine:
             line_to_type = TextProcessor.prepare_line_for_editor(line, curr_type, prev_type, conf)
             
             # 解析符号补全对 (仅当开启 auto_pair_handle 时)
-            pairs = {}
-            if conf.get('auto_pair_handle'):
-                import re
-                config_str = conf.get('auto_pair_config', "")
-                raw_pairs = re.findall(r'(.)(.)', config_str.replace(" ", "").replace(",", ""))
-                pairs = {p[0]: p[1] for p in raw_pairs}
-
             for ch in line_to_type:
                 if self.state == TypingState.STOPPED: break
                 self._wait_if_paused()
@@ -200,5 +208,6 @@ class TypingEngine:
             
             prev_type = curr_type
 
+        completed_normally = not self._stop_requested
         self.state = TypingState.STOPPED
-        self.set_status("输入完成" if self.state != TypingState.STOPPED else "已停止")
+        self.set_status("输入完成" if completed_normally else "已停止")

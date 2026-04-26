@@ -2,6 +2,11 @@ import re
 
 class TextProcessor:
     @staticmethod
+    def parse_auto_pairs(config_str):
+        cleaned = config_str.replace(" ", "").replace(",", "")
+        return {pair[0]: pair[1] for pair in re.findall(r'(.)(.)', cleaned)}
+
+    @staticmethod
     def detect_line_type(line):
         stripped = line.lstrip()
         if not stripped:

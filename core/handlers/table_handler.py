@@ -7,13 +7,7 @@ class TableHandler:
     @staticmethod
     def type_table_row(engine, line, conf):
         cells = TextProcessor.parse_markdown_table_row(line)
-        # 表格内部也需要解析补全对
-        pairs = {}
-        if conf.get('auto_pair_handle'):
-            import re
-            config_str = conf.get('auto_pair_config', "")
-            raw_pairs = re.findall(r'(.)(.)', config_str.replace(" ", "").replace(",", ""))
-            pairs = {p[0]: p[1] for p in raw_pairs}
+        pairs = TextProcessor.parse_auto_pairs(conf.get('auto_pair_config', "")) if conf.get('auto_pair_handle') else {}
 
         for i, cell in enumerate(cells):
             for ch in cell:
